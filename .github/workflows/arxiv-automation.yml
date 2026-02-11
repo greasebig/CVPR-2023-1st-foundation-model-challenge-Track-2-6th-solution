@@ -1,0 +1,48 @@
+name: arXiv CV Papers Automation
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # 每天北京时间 10:00 运行
+  workflow_dispatch: # 允许手动点击运行
+
+jobs:
+  update-papers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          pip install openai
+
+      - name: Run paper fetcher
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          VERSION="${{ vars.VERSION }}"
+          if [ -z "$VERSION" ]; then VERSION="v1"; fi
+          cd arxiv-automation
+          python3 scripts/fetch_papers_$VERSION.py
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add arxiv-automation/papers/ arxiv-automation/README.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update arXiv papers [skip ci]"
+            git push
+          fi
